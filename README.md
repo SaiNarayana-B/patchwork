@@ -183,20 +183,46 @@ patchwork scan --claude-md
 
 ### Option 3: MCP server
 
-Add to `~/.claude/settings.json`:
+**Claude Code** — add to `~/.claude.json` (or run `claude mcp add` interactively):
 
 ```json
 {
   "mcpServers": {
     "patchwork": {
       "command": "patchwork",
-      "args": ["serve", "--stdio", "/path/to/your/project"]
+      "args": ["serve", "/path/to/your/project", "--stdio"]
     }
   }
 }
 ```
 
-Then Claude Code can use 8 on-demand tools:
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "patchwork": {
+      "command": "patchwork",
+      "args": ["serve", "/path/to/your/project", "--stdio"]
+    }
+  }
+}
+```
+
+**Cursor** — add to `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "patchwork": {
+      "command": "patchwork",
+      "args": ["serve", ".", "--stdio"]
+    }
+  }
+}
+```
+
+Then your AI agent can use 8 on-demand tools:
 
 | Tool | When to use |
 |---|---|

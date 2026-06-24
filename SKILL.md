@@ -130,7 +130,7 @@ Add to Claude Code settings:
   "mcpServers": {
     "patchwork": {
       "command": "patchwork",
-      "args": ["serve", "--stdio", "/path/to/project"]
+      "args": ["serve", "/path/to/project", "--stdio"]
     }
   }
 }
