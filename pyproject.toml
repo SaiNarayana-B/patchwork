@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "patchwork-conventions"
-version = "0.1.1"
+version = "0.1.2"
 description = "Mine your codebase. Generate CONVENTIONS.md. Stop AI agents from making up your style."
 readme = "README.md"
 license = { text = "MIT" }

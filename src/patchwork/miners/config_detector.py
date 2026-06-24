@@ -17,6 +17,19 @@ except ImportError:
     except ImportError:
         tomllib = None  # type: ignore
 
+# Hard limit on config file size to prevent DoS from pathologically large files
+_MAX_CONFIG_BYTES = 1 * 1024 * 1024  # 1 MB
+
+
+def _safe_read(path: Path) -> str | None:
+    """Read a config file, returning None if it exceeds the size limit."""
+    try:
+        if path.stat().st_size > _MAX_CONFIG_BYTES:
+            return None
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
 
 @dataclass
 class ProjectConfig:
@@ -129,9 +142,12 @@ class ConfigDetector:
         return cfg
 
     def _read_package_json(self, path: Path, cfg: ProjectConfig) -> None:
+        text = _safe_read(path)
+        if text is None:
+            return
         try:
-            data = json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError):
+            data = json.loads(text)
+        except json.JSONDecodeError:
             return
 
         cfg.language = "javascript/typescript"
@@ -179,8 +195,11 @@ class ConfigDetector:
         cfg.language = "python"
         if tomllib is None:
             return
+        text = _safe_read(path)
+        if text is None:
+            return
         try:
-            data = tomllib.loads(path.read_text())
+            data = tomllib.loads(text)
         except Exception:
             return
 
@@ -225,9 +244,8 @@ class ConfigDetector:
     def _read_go_mod(self, path: Path, cfg: ProjectConfig) -> None:
         cfg.language = "go"
         cfg.package_manager = "go"
-        try:
-            text = path.read_text()
-        except OSError:
+        text = _safe_read(path)
+        if text is None:
             return
         m = re.search(r'^module\s+(\S+)', text, re.MULTILINE)
         if m:
@@ -253,8 +271,11 @@ class ConfigDetector:
         cfg.package_manager = "cargo"
         if tomllib is None:
             return
+        text = _safe_read(path)
+        if text is None:
+            return
         try:
-            data = tomllib.loads(path.read_text())
+            data = tomllib.loads(text)
         except Exception:
             return
         pkg = data.get("package", {})

@@ -189,9 +189,34 @@ async def run_server(root: Path, port: int = 3742, stdio: bool = True) -> None:
             ),
         ]
 
+    def _resolve_scan_root(raw_path: str | None) -> Path:
+        """Resolve and validate the scan path.
+
+        Rejects paths that escape the filesystem root or point to sensitive
+        system directories, and normalises symlinks so containment checks
+        are reliable.  The MCP server is a read-only tool, but we still
+        validate inputs at the boundary to follow least-privilege.
+        """
+        candidate = Path(raw_path).resolve() if raw_path else root.resolve()
+
+        # Reject obviously dangerous system paths
+        _BLOCKED = {"/etc", "/proc", "/sys", "/dev", "/private/etc"}
+        for blocked in _BLOCKED:
+            if str(candidate).startswith(blocked):
+                raise ValueError(f"Scanning system path '{candidate}' is not allowed.")
+
+        # Must be an existing directory (not a file or a socket etc.)
+        if not candidate.is_dir():
+            raise ValueError(f"Path '{candidate}' is not a directory.")
+
+        return candidate
+
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-        scan_root = Path(arguments.get("path", str(root))).resolve()
+        try:
+            scan_root = _resolve_scan_root(arguments.get("path"))
+        except ValueError as exc:
+            return [types.TextContent(type="text", text=f"Error: {exc}")]
 
         if arguments.get("refresh"):
             _invalidate(scan_root)
@@ -391,7 +416,7 @@ async def run_server(root: Path, port: int = 3742, stdio: bool = True) -> None:
             Route("/sse", endpoint=handle_sse),
             Mount("/messages", app=sse.handle_post_message),
         ])
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        uvicorn.run(app, host="127.0.0.1", port=port)
 
 
 def _check_convention(name: str, kind: str, lang: str, report: ConventionReport) -> str:

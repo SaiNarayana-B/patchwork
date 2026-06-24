@@ -111,7 +111,7 @@ def scan(
 
     if claude_md and out_path.exists():
         # Append patchwork section to existing CLAUDE.md
-        existing = out_path.read_text()
+        existing = out_path.read_text(encoding="utf-8")
         marker = "<!-- patchwork:start -->"
         end_marker = "<!-- patchwork:end -->"
         if marker in existing:
@@ -126,7 +126,7 @@ def scan(
         else:
             text = existing.rstrip() + f"\n\n{marker}\n{text}\n{end_marker}\n"
 
-    out_path.write_text(text)
+    out_path.write_text(text, encoding="utf-8")
 
     if not quiet:
         _print_summary(report, out_path)
@@ -145,7 +145,7 @@ def update(path: str, output: str | None) -> None:
     # Load any existing manual annotations
     manual_sections: dict[str, str] = {}
     if out_path.exists():
-        manual_sections = _extract_manual_sections(out_path.read_text())
+        manual_sections = _extract_manual_sections(out_path.read_text(encoding="utf-8"))
 
     opts = ScanOptions(root=root)
     with Progress(SpinnerColumn(), TextColumn("{task.description}"), transient=True) as p:
@@ -158,7 +158,7 @@ def update(path: str, output: str | None) -> None:
     for heading, content in manual_sections.items():
         text += f"\n\n## {heading} (manual)\n\n{content}"
 
-    out_path.write_text(text)
+    out_path.write_text(text, encoding="utf-8")
     console.print(f"[green]✓[/green] Updated [bold]{out_path}[/bold]")
     if manual_sections:
         console.print(f"  Preserved {len(manual_sections)} manual section(s)")
@@ -182,7 +182,7 @@ def diff(path: str) -> None:
         console.print("[yellow]No existing CONVENTIONS.md — run `patchwork scan` first[/yellow]")
         sys.exit(1)
 
-    old_text = out_path.read_text()
+    old_text = out_path.read_text(encoding="utf-8")
     diffs = list(difflib.unified_diff(
         old_text.splitlines(),
         new_text.splitlines(),
@@ -241,7 +241,7 @@ def watch(path: str, interval: float) -> None:
             if changed:
                 last_mtime = current
                 report = do_scan(opts)
-                out_path.write_text(report.to_markdown())
+                out_path.write_text(report.to_markdown(), encoding="utf-8")
                 console.print(f"[green]↺[/green] CONVENTIONS.md updated")
     except KeyboardInterrupt:
         console.print("\n[dim]Stopped[/dim]")

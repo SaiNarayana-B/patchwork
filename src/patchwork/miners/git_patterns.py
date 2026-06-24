@@ -9,7 +9,7 @@ GitPatternMiner — Mines git history for workflow conventions:
 from __future__ import annotations
 
 import re
-import subprocess
+import subprocess  # nosec B404 — used only for 'git' with a hardcoded arg list, no shell=True
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,7 +40,7 @@ _BRANCH_FIX = re.compile(r'^(fix|hotfix|bugfix)/[\w/-]+$')
 
 def _run_git(args: list[str], cwd: Path, max_bytes: int = 500_000) -> str:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 — list args, no shell=True, cwd is a validated Path
             ["git"] + args,
             cwd=str(cwd),
             capture_output=True,
