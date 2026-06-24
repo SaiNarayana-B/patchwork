@@ -36,7 +36,7 @@ def _get_or_scan(root: Path) -> ConventionReport:
     cached = _CACHE.get(key)
     if cached is not None:
         return cached
-    opts = ScanOptions(root=root, max_files=300)
+    opts = ScanOptions(root=root, max_files=500)
     report = do_scan(opts)
     _CACHE[key] = report
     return report
@@ -330,6 +330,8 @@ async def run_server(root: Path, port: int = 3742, stdio: bool = True) -> None:
                     lines.append(f"  logging: {er.logging_framework}")
                 if er.propagation_style:
                     lines.append(f"  propagation: {er.propagation_style}")
+                if er.custom_exceptions:
+                    lines.append(f"  custom exceptions: {', '.join(er.custom_exceptions[:6])}")
                 for note in er.notes:
                     lines.append(f"  note: {note}")
             return [types.TextContent(type="text", text="\n".join(lines) or "No error patterns found.")]
@@ -385,8 +387,13 @@ async def run_server(root: Path, port: int = 3742, stdio: bool = True) -> None:
             return [types.TextContent(type="text", text="\n".join(lines))]
 
         elif name == "patchwork_check":
-            sym = arguments["name"]
-            kind = arguments["kind"]
+            sym = arguments.get("name")
+            kind = arguments.get("kind")
+            if not sym or not kind:
+                return [types.TextContent(
+                    type="text",
+                    text="Error: 'name' and 'kind' are required arguments.",
+                )]
             lang = arguments.get("language", "")
             return [types.TextContent(
                 type="text",
