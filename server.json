@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.SaiNarayana-B/patchwork",
+  "title": "patchwork — Codebase Conventions for AI Agents",
+  "description": "Scan any codebase, generate CONVENTIONS.md, expose conventions as MCP tools for AI agents.",
+  "repository": {
+    "url": "https://github.com/SaiNarayana-B/patchwork",
+    "source": "github"
+  },
+  "version": "0.1.7",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "patchwork-conventions",
+      "version": "0.1.7",
+      "transport": {
+        "type": "stdio"
+      },
+      "installationInstructions": "pip install patchwork-conventions",
+      "arguments": [
+        {
+          "description": "Absolute path to the project root to scan",
+          "isRequired": true,
+          "format": "string",
+          "name": "path"
+        }
+      ]
+    }
+  ]
+}

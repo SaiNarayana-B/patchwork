@@ -1,5 +1,7 @@
 # patchwork
 
+<!-- mcp-name: io.github.SaiNarayana-B/patchwork -->
+
 **Mine your codebase. Generate CONVENTIONS.md. Stop AI agents from making up your style.**
 
 [![PyPI](https://img.shields.io/pypi/v/patchwork-conventions)](https://pypi.org/project/patchwork-conventions/)
