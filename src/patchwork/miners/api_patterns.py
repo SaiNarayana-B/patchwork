@@ -34,13 +34,23 @@ _RESP_DATA_ERROR = re.compile(r'["\'](?:data|error)["\']', re.IGNORECASE)
 _RESP_SUCCESS_DATA = re.compile(r'["\']success["\'].*["\']data["\']', re.DOTALL | re.IGNORECASE)
 _RESP_RESULT = re.compile(r'["\']result["\']', re.IGNORECASE)
 
-# Route parameter styles — look for params inside route strings
-# FastAPI/Starlette: "/items/{item_id}" or "/items/{item_id:int}"
-_ROUTE_BRACE = re.compile(r'["\'][^"\']*\{[a-zA-Z_]\w*(?::[a-zA-Z]+)?\}[^"\']*["\']')
-# Flask: "/items/<item_id>" or "/items/<int:item_id>"
-_ROUTE_ANGLE = re.compile(r'["\'][^"\']*<(?:[a-zA-Z_]+:)?[a-zA-Z_]\w*>[^"\']*["\']')
-# Express: "/items/:id" — must be a bare colon param, not inside {}
-_ROUTE_COLON = re.compile(r'["\'][^"\']*(?<!\{)/:[a-zA-Z_]\w*[^"\']*["\']')
+# Route parameter styles — match route strings passed to known route-registration calls.
+# We look for the route string ONLY when it appears as an argument to a route decorator
+# or router method, to avoid matching f-strings, format strings, and other /path usages.
+
+# FastAPI/Starlette: @app.get("/items/{item_id}") or @router.post("/x/{id:int}")
+_ROUTE_BRACE = re.compile(
+    r'(?:@?\w+\.(?:get|post|put|patch|delete|websocket|route|add_api_route)\s*\()'
+    r'\s*[f]?["\'][^"\']*\{[a-zA-Z_]\w*(?::[a-zA-Z]+)?\}'
+)
+# Flask: @app.route("/items/<int:item_id>")
+_ROUTE_ANGLE = re.compile(
+    r'(?:@?\w+\.route\s*\()\s*[f]?["\'][^"\']*<(?:[a-zA-Z_]+:)?[a-zA-Z_]\w*>'
+)
+# Express: router.get("/:id") or app.use("/items/:id")
+_ROUTE_COLON = re.compile(
+    r'(?:\w+\.(?:get|post|put|patch|delete|use|all)\s*\()\s*["\'][^"\']*(?<!\{):(?!\w*\})[a-zA-Z_]\w*'
+)
 
 # ORM signals
 _ORM_SIGNALS = {
@@ -109,9 +119,10 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
     data_error = 0
     success_data = 0
     result_shape = 0
-    colon_routes = 0
-    brace_routes = 0
-    angle_routes = 0
+    # Track route style per FILE (not per match) to avoid single-file anomalies
+    colon_route_files = 0
+    brace_route_files = 0
+    angle_route_files = 0
     # Track per-file hits (not per-match) to avoid false positives from
     # code that merely mentions framework names in strings, comments, or docs.
     orm_files: Counter[str] = Counter()
@@ -131,9 +142,9 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
         success_data += len(_RESP_SUCCESS_DATA.findall(text))
         result_shape += len(_RESP_RESULT.findall(text))
 
-        colon_routes += len(_ROUTE_COLON.findall(text))
-        brace_routes += len(_ROUTE_BRACE.findall(text))
-        angle_routes += len(_ROUTE_ANGLE.findall(text))
+        if _ROUTE_COLON.search(text): colon_route_files += 1
+        if _ROUTE_BRACE.search(text): brace_route_files += 1
+        if _ROUTE_ANGLE.search(text): angle_route_files += 1
 
         # Skip files that are themselves pattern-definition files (e.g. this miner)
         # to avoid self-matching on our own regex strings.
@@ -179,15 +190,16 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
     elif result_shape > 3:
         response_shape = "{result}"
 
-    # Route param style — brace wins ties because {param:type} can trigger colon regex
-    route_total = colon_routes + brace_routes + angle_routes
+    # Route param style — pick the style seen in the most files.
+    # Require at least 2 files to avoid single-file anomalies.
     route_style = None
-    if route_total > 0:
-        if brace_routes >= colon_routes and brace_routes > 0:
+    best = max(brace_route_files, angle_route_files, colon_route_files)
+    if best >= 2:
+        if brace_route_files == best:
             route_style = "{id} (FastAPI/Starlette style)"
-        elif angle_routes >= colon_routes and angle_routes > 0:
+        elif angle_route_files == best:
             route_style = "<id> (Flask style)"
-        elif colon_routes > 0:
+        else:
             route_style = ":id (Express style)"
 
     return APIResult(
