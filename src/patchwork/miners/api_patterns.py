@@ -34,10 +34,13 @@ _RESP_DATA_ERROR = re.compile(r'["\'](?:data|error)["\']', re.IGNORECASE)
 _RESP_SUCCESS_DATA = re.compile(r'["\']success["\'].*["\']data["\']', re.DOTALL | re.IGNORECASE)
 _RESP_RESULT = re.compile(r'["\']result["\']', re.IGNORECASE)
 
-# Route parameter styles
-_ROUTE_COLON = re.compile(r'(?:app|router)\.\w+\(["\'][^"\']*:\w+')   # Express :id
-_ROUTE_BRACE = re.compile(r'(?:path|url)\s*=\s*["\'][^"\']*\{[a-zA-Z_]+\}')  # FastAPI {id}
-_ROUTE_ANGLE = re.compile(r'(?:app|blueprint)\.\w+\(["\'][^"\']*<[a-zA-Z_:]+>')   # Flask <id>
+# Route parameter styles — look for params inside route strings
+# FastAPI/Starlette: "/items/{item_id}" or "/items/{item_id:int}"
+_ROUTE_BRACE = re.compile(r'["\'][^"\']*\{[a-zA-Z_]\w*(?::[a-zA-Z]+)?\}[^"\']*["\']')
+# Flask: "/items/<item_id>" or "/items/<int:item_id>"
+_ROUTE_ANGLE = re.compile(r'["\'][^"\']*<(?:[a-zA-Z_]+:)?[a-zA-Z_]\w*>[^"\']*["\']')
+# Express: "/items/:id" — must be a bare colon param, not inside {}
+_ROUTE_COLON = re.compile(r'["\'][^"\']*(?<!\{)/:[a-zA-Z_]\w*[^"\']*["\']')
 
 # ORM signals
 _ORM_SIGNALS = {
@@ -57,7 +60,8 @@ _FRAMEWORK_SIGNALS = {
     "FastAPI": [r"from fastapi import", r"@app\.get\(", r"@router\."],
     "Flask": [r"from flask import", r"@app\.route\(", r"Blueprint\("],
     "Django": [r"from django", r"urlpatterns\s*=", r"HttpResponse"],
-    "Express": [r"require\(['\"]express['\"]", r"app\.use\(", r"router\.get\("],
+    # For Express: require both the require() AND usage — router.get alone is too generic
+    "Express": [r"require\(['\"]express['\"]\)", r"express\(\)"],
     "Fastify": [r"require\(['\"]fastify['\"]", r"fastify\.register"],
     "Hono": [r"from ['\"]hono['\"]", r"new Hono\("],
     "Gin": [r"\bgin\b.*\bDefault\(\)", r"r\.GET\(", r"c\.JSON\("],
@@ -175,17 +179,16 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
     elif result_shape > 3:
         response_shape = "{result}"
 
-    # Route param style
+    # Route param style — brace wins ties because {param:type} can trigger colon regex
     route_total = colon_routes + brace_routes + angle_routes
     route_style = None
     if route_total > 0:
-        best = max(colon_routes, brace_routes, angle_routes)
-        if colon_routes == best:
-            route_style = ":id (Express style)"
-        elif brace_routes == best:
-            route_style = "{id} (FastAPI style)"
-        else:
+        if brace_routes >= colon_routes and brace_routes > 0:
+            route_style = "{id} (FastAPI/Starlette style)"
+        elif angle_routes >= colon_routes and angle_routes > 0:
             route_style = "<id> (Flask style)"
+        elif colon_routes > 0:
+            route_style = ":id (Express style)"
 
     return APIResult(
         response_shape=response_shape,
