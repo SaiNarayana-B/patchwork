@@ -108,12 +108,14 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
     colon_routes = 0
     brace_routes = 0
     angle_routes = 0
-    orm_counts: Counter[str] = Counter()
-    fw_counts: Counter[str] = Counter()
+    # Track per-file hits (not per-match) to avoid false positives from
+    # code that merely mentions framework names in strings, comments, or docs.
+    orm_files: Counter[str] = Counter()
+    fw_files: Counter[str] = Counter()
     async_counts: Counter[str] = Counter()
     http_client_counts: Counter[str] = Counter()
-    has_graphql = False
-    has_grpc = False
+    gql_files = 0
+    grpc_files = 0
 
     for path in paths[:200]:
         try:
@@ -129,32 +131,40 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
         brace_routes += len(_ROUTE_BRACE.findall(text))
         angle_routes += len(_ROUTE_ANGLE.findall(text))
 
-        for orm, patterns in _ORM_SIGNALS.items():
-            for pat in patterns:
-                if re.search(pat, text):
-                    orm_counts[orm] += 1
-                    break
+        # Skip files that are themselves pattern-definition files (e.g. this miner)
+        # to avoid self-matching on our own regex strings.
+        if "_ORM_SIGNALS" in text or "_FRAMEWORK_SIGNALS" in text:
+            continue
+
+        # Count each ORM/framework once per file (not per pattern match)
+        for orm_name, patterns in _ORM_SIGNALS.items():
+            if any(re.search(pat, text) for pat in patterns):
+                orm_files[orm_name] += 1
 
         for fw, patterns in _FRAMEWORK_SIGNALS.items():
-            for pat in patterns:
-                if re.search(pat, text):
-                    fw_counts[fw] += 1
-                    break
+            if any(re.search(pat, text) for pat in patterns):
+                fw_files[fw] += 1
 
         for style, patterns in _ASYNC_SIGNALS.get(lang, {}).items():
-            for pat in patterns:
-                if re.search(pat, text):
-                    async_counts[style] += 1
-                    break
+            if any(re.search(pat, text) for pat in patterns):
+                async_counts[style] += 1
 
         for client in _HTTP_CLIENTS.get(lang, []):
-            if client in text:
+            # Match actual import/usage, not just the string appearing in comments or dicts
+            if re.search(rf'(?:import\s+{re.escape(client)}|from\s+{re.escape(client)}\s|{re.escape(client)}\.)', text):
                 http_client_counts[client] += 1
 
-        if "graphql" in text.lower() or "GraphQL" in text or "gql`" in text:
-            has_graphql = True
-        if "proto" in text.lower() or "grpc" in text.lower() or "protobuf" in text.lower():
-            has_grpc = True
+        if re.search(r'\bgraphql\b|gql`', text, re.IGNORECASE):
+            gql_files += 1
+        if re.search(r'\bgrpc\b|\bprotobuf\b|\.proto["\']', text, re.IGNORECASE):
+            grpc_files += 1
+
+    # Require signal in ≥3 files to filter out false positives.
+    # Single or double-file mentions are often: config files, the tool's own
+    # pattern dictionaries, test fixtures, or README-like docstrings.
+    min_files = 3
+    orm_files = Counter({k: v for k, v in orm_files.items() if v >= min_files})
+    fw_files = Counter({k: v for k, v in fw_files.items() if v >= min_files})
 
     # Response shape
     response_shape = None
@@ -169,27 +179,23 @@ def _detect_apis(paths: list[Path], lang: str) -> APIResult:
     route_total = colon_routes + brace_routes + angle_routes
     route_style = None
     if route_total > 0:
-        if colon_routes == max(colon_routes, brace_routes, angle_routes):
+        best = max(colon_routes, brace_routes, angle_routes)
+        if colon_routes == best:
             route_style = ":id (Express style)"
-        elif brace_routes == max(colon_routes, brace_routes, angle_routes):
+        elif brace_routes == best:
             route_style = "{id} (FastAPI style)"
         else:
             route_style = "<id> (Flask style)"
 
-    async_pattern = async_counts.most_common(1)[0][0] if async_counts else None
-    orm = orm_counts.most_common(1)[0][0] if orm_counts else None
-    http_client = http_client_counts.most_common(1)[0][0] if http_client_counts else None
-    api_frameworks = [fw for fw, _ in fw_counts.most_common(3)]
-
     return APIResult(
         response_shape=response_shape,
         route_param_style=route_style,
-        async_pattern=async_pattern,
-        orm=orm,
-        has_graphql=has_graphql,
-        has_grpc=has_grpc,
-        api_frameworks=api_frameworks,
-        http_client=http_client,
+        async_pattern=async_counts.most_common(1)[0][0] if async_counts else None,
+        orm=orm_files.most_common(1)[0][0] if orm_files else None,
+        has_graphql=gql_files >= 3,
+        has_grpc=grpc_files >= 3,
+        api_frameworks=[fw for fw, _ in fw_files.most_common(3)],
+        http_client=http_client_counts.most_common(1)[0][0] if http_client_counts else None,
     )
 
 

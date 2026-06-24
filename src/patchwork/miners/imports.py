@@ -29,7 +29,7 @@ class ImportResult:
 
 _PY_RELATIVE = re.compile(r'^\s*from\s+\.', re.MULTILINE)
 _PY_ABSOLUTE = re.compile(r'^\s*(?:import|from)\s+(?!\.)', re.MULTILINE)
-_PY_IMPORT = re.compile(r'^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.,\s]+))', re.MULTILINE)
+_PY_IMPORT = re.compile(r'^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w]+(?:\s*,\s*[\w]+)*))', re.MULTILINE)
 
 _JS_RELATIVE = re.compile(r"""(?:import|require)\s*\(?['"](\./|\.\./)""", re.MULTILINE)
 _JS_ABSOLUTE_ALIAS = re.compile(r"""(?:import|require)\s*\(?['"](@\w+/|~/)""", re.MULTILINE)
@@ -60,9 +60,12 @@ def _detect_py_imports(paths: list[Path]) -> ImportResult:
         relative_count += len(_PY_RELATIVE.findall(text))
         absolute_count += len(_PY_ABSOLUTE.findall(text))
         for m in _PY_IMPORT.finditer(text):
-            mod = (m.group(1) or m.group(2) or "").strip().split(".")[0]
-            if mod:
-                all_modules.append(mod)
+            raw = (m.group(1) or m.group(2) or "").strip()
+            # group(1) is a dotted module path; group(2) may be 'os, sys, re'
+            for part in raw.split(","):
+                mod = part.strip().split(".")[0]
+                if mod and mod.isidentifier():
+                    all_modules.append(mod)
         # Detect src/ or similar path aliases in pyproject/setup.cfg
         if "@" in text or "from src." in text:
             aliases.add("src/")
