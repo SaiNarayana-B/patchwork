@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "patchwork-conventions"
+version = "0.1.0"
+description = "Mine your codebase. Generate CONVENTIONS.md. Stop AI agents from making up your style."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "patchwork contributors" }]
+keywords = [
+    "ai", "claude-code", "conventions", "code-style",
+    "context-engineering", "mcp", "agent-skills",
+    "static-analysis", "tree-sitter"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+dependencies = [
+    "click>=8.0",
+    "rich>=13.0",
+    "tree-sitter>=0.23",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-javascript>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "mcp>=1.0",
+    "gitpython>=3.1",
+    "pathspec>=0.11",
+    "toml>=0.10; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio", "black", "ruff", "mypy"]
+full = [
+    "tree-sitter-rust>=0.23",
+    "tree-sitter-go>=0.23",
+    "tree-sitter-java>=0.23",
+]
+
+[project.scripts]
+patchwork = "patchwork.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/patchwork"
+Repository = "https://github.com/yourusername/patchwork"
+Issues = "https://github.com/yourusername/patchwork/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
